@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --turbopack -p 3001",
+    "dev:https": "next dev --turbopack -p 3001 --experimental-https",
+    "dev:alt": "next dev --turbopack -p 3003",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

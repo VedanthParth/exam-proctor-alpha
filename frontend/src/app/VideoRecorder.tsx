@@ -1,4 +1,19 @@
+"use client";
+
 import React, { useRef, useState, useEffect } from "react";
+
+interface Recording {
+  id: string;
+  filename: string;
+  originalname: string;
+  size: number;
+  mimetype: string;
+  uploadDate: string;
+  transcriptStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  transcript?: string;
+  confidence?: number;
+  url: string;
+}
 
 const VideoRecorder: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -7,24 +22,81 @@ const VideoRecorder: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [transcript, setTranscript] = useState<string>("");
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>("idle");
+  const [recordings, setRecordings] = useState<Recording[]>([]);
 
   useEffect(() => {
     let stream: MediaStream;
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      .then((s) => {
-        stream = s;
-        setMediaStream(stream);
-        setError(null);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+    
+    // Check if we're in the browser environment
+    if (typeof window === 'undefined') {
+      // Server-side rendering - do nothing
+      return;
+    }
+
+    // Check for getUserMedia support with more detailed detection
+    const hasGetUserMedia = !!(
+      navigator &&
+      navigator.mediaDevices &&
+      navigator.mediaDevices.getUserMedia
+    );
+
+    if (hasGetUserMedia) {
+      console.log('Attempting to access camera and microphone...');
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then((s) => {
+          console.log('Successfully got media stream');
+          stream = s;
+          setMediaStream(stream);
+          setError(null);
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+        })
+        .catch((err) => {
+          console.error('getUserMedia error:', err);
+          let errorMessage = "Could not access camera/microphone: ";
+          
+          if (err.name === 'NotAllowedError') {
+            errorMessage += "Permission denied. Please allow camera and microphone access.";
+          } else if (err.name === 'NotFoundError') {
+            errorMessage += "No camera or microphone found.";
+          } else if (err.name === 'NotReadableError') {
+            errorMessage += "Camera or microphone is already in use.";
+          } else if (err.name === 'OverconstrainedError') {
+            errorMessage += "Camera or microphone constraints could not be satisfied.";
+          } else {
+            errorMessage += err.message || "Unknown error occurred.";
+          }
+          
+          setError(errorMessage);
+        });
+    } else {
+      // Check what's missing to provide more specific error
+      let errorDetails = "Camera/microphone access is not supported: ";
+      
+      if (!navigator) {
+        errorDetails += "Navigator not available.";
+      } else if (!navigator.mediaDevices) {
+        const isHttps = window.location.protocol === 'https:';
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        
+        if (!isHttps && !isLocalhost) {
+          errorDetails += "MediaDevices API requires HTTPS. Please access this site over HTTPS.";
+        } else {
+          errorDetails += "MediaDevices API not available in this browser.";
         }
-      })
-      .catch((err) => {
-        setError("Could not access camera/microphone: " + err.message);
-      });
+      } else if (!navigator.mediaDevices.getUserMedia) {
+        errorDetails += "getUserMedia API not available in this browser.";
+      } else {
+        errorDetails += "Unknown compatibility issue.";
+      }
+      
+      console.error('Media access not supported:', errorDetails);
+      setError(errorDetails);
+    }
+    
     return () => {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
@@ -35,6 +107,13 @@ const VideoRecorder: React.FC = () => {
   const handleStart = () => {
     setStatusMessage("");
     if (!mediaStream) return;
+    
+    // Check if MediaRecorder is available
+    if (typeof window === 'undefined' || !window.MediaRecorder) {
+      setError("Video recording is not supported in this browser");
+      return;
+    }
+    
     chunksRef.current = [];
     const recorder = new MediaRecorder(mediaStream, { mimeType: 'video/webm' });
     recorder.ondataavailable = (event: BlobEvent) => {
@@ -59,56 +138,93 @@ const VideoRecorder: React.FC = () => {
     setIsRecording(false);
   };
 
+  // Load recordings from backend
+  const loadRecordings = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/recordings');
+      if (response.ok) {
+        const data = await response.json();
+        setRecordings(data.recordings || []);
+      }
+    } catch (error) {
+      console.error('Failed to load recordings:', error);
+    }
+  };
+
+  // Load recordings on component mount
+  useEffect(() => {
+    loadRecordings();
+  }, []);
+
   const uploadRecording = async (blob: Blob) => {
-    setStatusMessage("Uploading...");
+    setStatusMessage("Uploading recording...");
     setUploadStatus('uploading');
     const formData = new FormData();
     formData.append('videoBlob', blob, 'recording.webm');
+    
     try {
-      const response = await fetch('/api/upload-recording', {
+      // Call the backend API on port 5000
+      const response = await fetch('http://localhost:5000/api/upload-recording', {
         method: 'POST',
         body: formData,
       });
+      
       if (response.ok) {
-        setUploadStatus('success');
         const data = await response.json();
-        setStatusMessage("Transcribing...");
-        if (data.fileName) {
-          // Call transcribe endpoint
-          const transcribeRes = await fetch('/api/transcribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileName: data.fileName }),
-          });
-          if (transcribeRes.ok) {
-            const transcribeData = await transcribeRes.json();
-            setTranscript(transcribeData.transcript || "");
-            setStatusMessage("");
-          } else {
-            setTranscript("");
-            setStatusMessage("Transcription failed.");
-          }
-        }
+        setUploadStatus('success');
+        setStatusMessage("Recording uploaded successfully!");
+        
+        // Reload recordings to show the new one
+        loadRecordings();
+        
+        console.log('Upload successful:', data);
       } else {
         setUploadStatus('error');
-        const errorText = await response.text();
-        setStatusMessage("Upload failed: " + errorText);
+        const errorData = await response.json();
+        setStatusMessage(`Upload failed: ${errorData.error || response.statusText}`);
+        console.error('Upload failed:', errorData);
       }
     } catch (err) {
       setUploadStatus('error');
-      setStatusMessage("Error uploading recording: " + (err as Error).message);
+      setStatusMessage("Error connecting to server: " + (err as Error).message);
+      console.error('Network error:', err);
+    }
+  };
+
+  // Generate transcript for a recording
+  const generateTranscript = async (recordingId: string) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/recordings/${recordingId}/transcribe`, {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Update the recording in our local state
+        setRecordings(prev => prev.map(rec => 
+          rec.id === recordingId ? { ...rec, ...data.recording } : rec
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to generate transcript:', error);
     }
   };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">Video Recorder</h2>
+      
+      {/* Camera Preview */}
       <video
         ref={videoRef}
         autoPlay
+        muted
         playsInline
         className="border-4 border-gray-300 shadow-lg rounded-lg mb-4 bg-black"
         style={{ width: 400 }}
       />
+      
+      {/* Recording Controls */}
       <div className="flex gap-4 mb-4">
         <button
           onClick={handleStart}
@@ -125,11 +241,13 @@ const VideoRecorder: React.FC = () => {
           Stop Recording
         </button>
       </div>
+      
+      {/* Status Messages */}
       {statusMessage && (
         <div className="mb-2 text-blue-700 font-medium animate-pulse">{statusMessage}</div>
       )}
       {error && (
-        <div className="mb-2 text-red-600 font-semibold bg-red-100 border border-red-300 rounded p-2 max-w-md text-center">
+        <div className="mb-4 text-red-600 font-semibold bg-red-100 border border-red-300 rounded p-2 max-w-md text-center">
           {error}
         </div>
       )}
@@ -142,12 +260,105 @@ const VideoRecorder: React.FC = () => {
       {uploadStatus === 'error' && (
         <div className="mb-2 text-red-700 font-medium">Upload failed.</div>
       )}
-      {transcript && (
-        <div className="mt-4 bg-white p-4 rounded shadow max-w-lg w-full">
-          <strong className="block mb-2 text-gray-700">Transcript:</strong>
-          <div className="whitespace-pre-line text-gray-900">{transcript}</div>
-        </div>
-      )}
+
+      {/* Recordings List */}
+      <div className="mt-8 w-full max-w-4xl">
+        <h3 className="text-xl font-bold mb-4 text-gray-800">Stored Recordings</h3>
+        {recordings.length === 0 ? (
+          <p className="text-gray-600">No recordings yet. Start recording to create your first recording!</p>
+        ) : (
+          <div className="grid gap-4">
+            {recordings.map((recording) => (
+              <div key={recording.id} className="bg-white p-4 rounded-lg shadow-md border">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-gray-800">{recording.originalname}</h4>
+                  <span className="text-sm text-gray-500">
+                    {new Date(recording.uploadDate).toLocaleString()}
+                  </span>
+                </div>
+                
+                <div className="mb-3">
+                  <p className="text-sm text-gray-600">
+                    Size: {(recording.size / 1024 / 1024).toFixed(2)} MB • 
+                    Type: {recording.mimetype} •
+                    Status: <span className={`font-medium ${
+                      recording.transcriptStatus === 'completed' ? 'text-green-600' :
+                      recording.transcriptStatus === 'processing' ? 'text-blue-600' :
+                      recording.transcriptStatus === 'failed' ? 'text-red-600' :
+                      'text-gray-600'
+                    }`}>
+                      {recording.transcriptStatus}
+                    </span>
+                  </p>
+                </div>
+
+                {/* Video/Audio Player */}
+                <div className="mb-3">
+                  {recording.mimetype.startsWith('video/') ? (
+                    <video
+                      controls
+                      className="w-full max-w-md rounded"
+                      style={{ maxHeight: '200px' }}
+                    >
+                      <source src={recording.url} type={recording.mimetype} />
+                      Your browser does not support the video tag.
+                    </video>
+                  ) : (
+                    <audio controls className="w-full">
+                      <source src={recording.url} type={recording.mimetype} />
+                      Your browser does not support the audio tag.
+                    </audio>
+                  )}
+                </div>
+
+                {/* Transcript Section */}
+                <div className="mb-3">
+                  {recording.transcriptStatus === 'pending' && (
+                    <button
+                      onClick={() => generateTranscript(recording.id)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                    >
+                      Generate Transcript
+                    </button>
+                  )}
+                  
+                  {recording.transcriptStatus === 'processing' && (
+                    <div className="text-blue-600 text-sm animate-pulse">Generating transcript...</div>
+                  )}
+                  
+                  {recording.transcriptStatus === 'completed' && recording.transcript && (
+                    <div className="bg-gray-50 p-3 rounded border">
+                      <div className="flex justify-between items-center mb-2">
+                        <strong className="text-gray-700">Transcript:</strong>
+                        {recording.confidence && (
+                          <span className="text-sm text-gray-500">
+                            Confidence: {(recording.confidence * 100).toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="whitespace-pre-line text-gray-900 text-sm">
+                        {recording.transcript}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {recording.transcriptStatus === 'failed' && (
+                    <div className="text-red-600 text-sm">
+                      Transcript generation failed. 
+                      <button
+                        onClick={() => generateTranscript(recording.id)}
+                        className="ml-2 px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
