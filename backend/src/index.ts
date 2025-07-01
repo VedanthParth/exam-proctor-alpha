@@ -4,6 +4,8 @@ import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
+import https from 'https';
+import http from 'http';
 // import { pipeline } from '@xenova/transformers'; // Temporarily disabled due to sharp module issues
 
 // Create uploads/recordings directory if it doesn't exist
@@ -189,17 +191,79 @@ async function transcribeAudio(filePath: string): Promise<{ transcript: string; 
 
 // Create Express app
 const app: express.Express = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8000;
 
 // Middleware
 app.use(cors({
-  origin: [
-    'http://localhost:3001',
-    'https://localhost:3001',
-    'http://localhost:3003',
-    'https://localhost:3003'
-  ],
-  methods: ['GET', 'POST'],
+  origin: function (origin, callback) {
+    console.log('CORS check for origin:', origin);
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      console.log('No origin provided - allowing request');
+      return callback(null, true);
+    }
+    
+    // Allow localhost and IP addresses on ports 3001 and 3003
+    const allowedOriginPatterns = [
+      /^https?:\/\/localhost:(3001|3003)$/,
+      /^https?:\/\/127\.0\.0\.1:(3001|3003)$/,
+      /^https?:\/\/192\.168\.\d+\.\d+:(3001|3003)$/,
+      /^https?:\/\/10\.\d+\.\d+\.\d+:(3001|3003)$/,
+      /^https?:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:(3001|3003)$/,
+      /^https?:\/\/frontend:(3001|3003)$/
+    ];
+    
+    // Test each pattern and log which one matches
+    const matchedPattern = allowedOriginPatterns.find(pattern => {
+      const matches = pattern.test(origin);
+      console.log(`Pattern ${pattern} ${matches ? 'MATCHES' : 'does not match'} origin ${origin}`);
+      return matches;
+    });
+    
+    if (matchedPattern) {
+      console.log('CORS allowing origin:', origin);
+      callback(null, true);
+    } else {
+      console.warn('CORS BLOCKED origin:', origin);
+      console.warn('Allowed patterns:', allowedOriginPatterns.map(p => p.toString()));
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
+// Add preflight handler for complex requests
+app.options('*', cors({
+  origin: function (origin, callback) {
+    console.log('OPTIONS preflight check for origin:', origin);
+    
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    const allowedOriginPatterns = [
+      /^https?:\/\/localhost:(3001|3003)$/,
+      /^https?:\/\/127\.0\.0\.1:(3001|3003)$/,
+      /^https?:\/\/192\.168\.\d+\.\d+:(3001|3003)$/,
+      /^https?:\/\/10\.\d+\.\d+\.\d+:(3001|3003)$/,
+      /^https?:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:(3001|3003)$/,
+      /^https?:\/\/frontend:(3001|3003)$/
+    ];
+    
+    const isAllowed = allowedOriginPatterns.some(pattern => pattern.test(origin));
+    console.log(`OPTIONS preflight: ${isAllowed ? 'ALLOWING' : 'BLOCKING'} origin ${origin}`);
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 app.use(express.json());
@@ -208,6 +272,16 @@ app.use(express.json());
 app.use('/recordings', express.static(path.join(__dirname, '../uploads/recordings')));
 
 // Health check endpoint
+app.get('/health', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// Health check endpoint (alternative path)
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({
     success: true,
@@ -231,11 +305,13 @@ app.get('/api/transcription-status', (req: Request, res: Response) => {
 
 // Get all recordings
 app.get('/api/recordings', (req: Request, res: Response) => {
+  const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+  const baseUrl = `${protocol}://${req.get('host') || `localhost:${PORT}`}`;
   res.json({
     success: true,
     recordings: recordings.map(recording => ({
       ...recording,
-      url: `http://localhost:${PORT}/recordings/${recording.filename}`
+      url: `${baseUrl}/recordings/${recording.filename}`
     })),
     count: recordings.length
   });
@@ -252,13 +328,72 @@ app.get('/api/recordings/:id', (req: Request, res: Response) => {
     return;
   }
   
+  const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+  const baseUrl = `${protocol}://${req.get('host') || `localhost:${PORT}`}`;
   res.json({
     success: true,
     recording: {
       ...recording,
-      url: `http://localhost:${PORT}/recordings/${recording.filename}`
+      url: `${baseUrl}/recordings/${recording.filename}`
     }
   });
+});
+
+// Delete specific recording
+app.delete('/api/recordings/:id', async (req: Request, res: Response): Promise<void> => {
+  const recordingId = req.params.id;
+  const recordingIndex = recordings.findIndex(r => r.id === recordingId);
+  
+  if (recordingIndex === -1) {
+    res.status(404).json({
+      success: false,
+      error: 'Recording not found'
+    });
+    return;
+  }
+
+  const recording = recordings[recordingIndex];
+
+  try {
+    // Delete the physical file
+    await fs.unlink(recording.path);
+    console.log('Deleted file:', recording.path);
+    
+    // Remove from recordings array
+    recordings.splice(recordingIndex, 1);
+    
+    res.json({
+      success: true,
+      message: 'Recording deleted successfully',
+      deletedRecording: {
+        id: recording.id,
+        filename: recording.filename,
+        originalname: recording.originalname
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting recording:', error);
+    
+    // If file doesn't exist, still remove from array
+    if (error instanceof Error && error.message.includes('ENOENT')) {
+      recordings.splice(recordingIndex, 1);
+      res.json({
+        success: true,
+        message: 'Recording removed from database (file was already missing)',
+        deletedRecording: {
+          id: recording.id,
+          filename: recording.filename,
+          originalname: recording.originalname
+        }
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to delete recording',
+        details: error instanceof Error ? error.message : 'Unknown error occurred'
+      });
+    }
+  }
 });
 
 // Generate transcript for a recording
@@ -298,7 +433,7 @@ app.post('/api/recordings/:id/transcribe', async (req: Request, res: Response): 
       message: 'Transcript generated successfully',
       recording: {
         ...recording,
-        url: `http://localhost:${PORT}/recordings/${recording.filename}`
+        url: `${req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http'}://${req.get('host') || `localhost:${PORT}`}/recordings/${recording.filename}`
       }
     });
   } catch (error) {
@@ -365,12 +500,14 @@ app.post('/api/upload-recording', uploadVideoBlob, async (req: express.Request, 
     recordings.push(recording);
 
     // Send success response with recording details
+    const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const baseUrl = `${protocol}://${req.get('host') || `localhost:${PORT}`}`;
     res.json({
       success: true,
       message: 'File uploaded and stored successfully',
       recording: {
         ...recording,
-        url: `http://localhost:${PORT}/recordings/${recording.filename}`
+        url: `${baseUrl}/recordings/${recording.filename}`
       }
     });
 
@@ -438,16 +575,56 @@ app.use((error: any, req: Request, res: Response, next: NextFunction): void => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/api/health`);
-  console.log(`Transcription status: http://localhost:${PORT}/api/transcription-status`);
-  console.log(`Upload & Store recordings: http://localhost:${PORT}/api/upload-recording`);
-  console.log(`Get recordings: http://localhost:${PORT}/api/recordings`);
-  console.log(`Recordings served at: http://localhost:${PORT}/recordings/`);
-  console.log(`Note: Files are now stored permanently for playback`);
-  console.log(`Note: Transcript generation is available on-demand per recording`);
-});
+const startServer = async () => {
+  const useHttps = process.env.HTTPS === 'true';
+  
+  if (useHttps) {
+    try {
+      // Try to read SSL certificates from frontend directory
+      const keyPath = path.join(__dirname, '../../frontend/certificates/localhost-key.pem');
+      const certPath = path.join(__dirname, '../../frontend/certificates/localhost.pem');
+      
+      const key = await fs.readFile(keyPath, 'utf8');
+      const cert = await fs.readFile(certPath, 'utf8');
+      
+      const httpsServer = https.createServer({ key, cert }, app);
+      httpsServer.listen(Number(PORT), '0.0.0.0', () => {
+        console.log(`🔒 HTTPS Server running on https://0.0.0.0:${PORT}`);
+        console.log(`🔒 Health check: https://localhost:${PORT}/api/health`);
+        console.log(`🔒 Transcription status: https://localhost:${PORT}/api/transcription-status`);
+        console.log(`🔒 Upload & Store recordings: https://localhost:${PORT}/api/upload-recording`);
+        console.log(`🔒 Get recordings: https://localhost:${PORT}/api/recordings`);
+        console.log(`🔒 Delete recordings: https://localhost:${PORT}/api/recordings/:id`);
+        console.log(`🔒 Recordings served at: https://localhost:${PORT}/recordings/`);
+        console.log(`Note: Files are now stored permanently for playback`);
+        console.log(`Note: Transcript generation is available on-demand per recording`);
+      });
+    } catch (error) {
+      console.warn('⚠️  HTTPS certificates not found, falling back to HTTP');
+      console.warn('Error:', error instanceof Error ? error.message : error);
+      startHttpServer();
+    }
+  } else {
+    startHttpServer();
+  }
+};
+
+const startHttpServer = () => {
+  const httpServer = http.createServer(app);
+  httpServer.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`🌐 HTTP Server running on http://0.0.0.0:${PORT}`);
+    console.log(`🌐 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`🌐 Transcription status: http://localhost:${PORT}/api/transcription-status`);
+    console.log(`🌐 Upload & Store recordings: http://localhost:${PORT}/api/upload-recording`);
+    console.log(`🌐 Get recordings: http://localhost:${PORT}/api/recordings`);
+    console.log(`🌐 Delete recordings: http://localhost:${PORT}/api/recordings/:id`);
+    console.log(`🌐 Recordings served at: http://localhost:${PORT}/recordings/`);
+    console.log(`Note: Files are now stored permanently for playback`);
+    console.log(`Note: Transcript generation is available on-demand per recording`);
+  });
+};
+
+startServer();
 
 // Export app for testing purposes
 export default app;

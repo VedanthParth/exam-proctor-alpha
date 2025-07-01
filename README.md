@@ -116,7 +116,7 @@ Bash
 cd backend
 pnpm run dev # If using ts-node-dev for development, otherwise:
               # pnpm run start (for compiled JS)
-The backend server will typically run on http://localhost:5000 (or your configured port).
+The backend server will typically run on http://localhost:8000 (or your configured port).
 
 Start the Frontend Development Server:
 Open another terminal, navigate to the frontend directory, and run:

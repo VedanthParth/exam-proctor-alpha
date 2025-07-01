@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 
 interface Recording {
   id: string;
@@ -138,10 +138,32 @@ const VideoRecorder: React.FC = () => {
     setIsRecording(false);
   };
 
+  // Get API URL from environment or fallback to localhost
+  const getApiUrl = () => {
+    if (typeof window !== 'undefined') {
+      // Client-side: check for environment variable first
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (apiUrl) {
+        return apiUrl;
+      }
+      
+      // For development: use HTTP for backend API even if frontend is HTTPS
+      const hostname = window.location.hostname;
+      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        // Use HTTP for backend API on network IP
+        return `http://${hostname}:8000`;
+      }
+      
+      return 'http://localhost:8000';
+    }
+    // Fallback to HTTP for server-side rendering
+    return 'http://localhost:8000';
+  };
+
   // Load recordings from backend
-  const loadRecordings = async () => {
+  const loadRecordings = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/recordings');
+      const response = await fetch(`${getApiUrl()}/api/recordings`);
       if (response.ok) {
         const data = await response.json();
         setRecordings(data.recordings || []);
@@ -149,12 +171,12 @@ const VideoRecorder: React.FC = () => {
     } catch (error) {
       console.error('Failed to load recordings:', error);
     }
-  };
+  }, []);
 
   // Load recordings on component mount
   useEffect(() => {
     loadRecordings();
-  }, []);
+  }, [loadRecordings]);
 
   const uploadRecording = async (blob: Blob) => {
     setStatusMessage("Uploading recording...");
@@ -163,8 +185,8 @@ const VideoRecorder: React.FC = () => {
     formData.append('videoBlob', blob, 'recording.webm');
     
     try {
-      // Call the backend API on port 5000
-      const response = await fetch('http://localhost:5000/api/upload-recording', {
+      // Call the backend API
+      const response = await fetch(`${getApiUrl()}/api/upload-recording`, {
         method: 'POST',
         body: formData,
       });
@@ -194,7 +216,7 @@ const VideoRecorder: React.FC = () => {
   // Generate transcript for a recording
   const generateTranscript = async (recordingId: string) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/recordings/${recordingId}/transcribe`, {
+      const response = await fetch(`${getApiUrl()}/api/recordings/${recordingId}/transcribe`, {
         method: 'POST',
       });
       
@@ -207,6 +229,32 @@ const VideoRecorder: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to generate transcript:', error);
+    }
+  };
+
+  // Delete a recording
+  const deleteRecording = async (recordingId: string, recordingName: string) => {
+    if (!confirm(`Are you sure you want to delete "${recordingName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${getApiUrl()}/api/recordings/${recordingId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        // Remove the recording from local state
+        setRecordings(prev => prev.filter(rec => rec.id !== recordingId));
+        console.log('Recording deleted successfully');
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to delete recording:', errorData);
+        alert(`Failed to delete recording: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Failed to delete recording:', error);
+      alert('Failed to delete recording. Please check your connection.');
     }
   };
 
@@ -272,9 +320,18 @@ const VideoRecorder: React.FC = () => {
               <div key={recording.id} className="bg-white p-4 rounded-lg shadow-md border">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="font-semibold text-gray-800">{recording.originalname}</h4>
-                  <span className="text-sm text-gray-500">
-                    {new Date(recording.uploadDate).toLocaleString()}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500">
+                      {new Date(recording.uploadDate).toLocaleString()}
+                    </span>
+                    <button
+                      onClick={() => deleteRecording(recording.id, recording.originalname)}
+                      className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium transition-colors"
+                      title="Delete recording"
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="mb-3">
@@ -353,6 +410,16 @@ const VideoRecorder: React.FC = () => {
                       </button>
                     </div>
                   )}
+                </div>
+
+                {/* Delete Recording Button */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => deleteRecording(recording.id, recording.originalname)}
+                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                  >
+                    Delete Recording
+                  </button>
                 </div>
               </div>
             ))}
