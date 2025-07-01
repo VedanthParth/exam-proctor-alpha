@@ -269,7 +269,10 @@ const VideoRecorder: React.FC = () => {
         muted
         playsInline
         className="border-4 border-gray-300 shadow-lg rounded-lg mb-4 bg-black"
-        style={{ width: 400 }}
+        style={{ 
+          width: 400,
+          transform: 'scaleX(-1)' // Mirror the video horizontally
+        }}
       />
       
       {/* Recording Controls */}
