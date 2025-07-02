@@ -1,12 +1,10 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
-import { createServer as createHttpsServer } from 'https';
 import { Server as SocketIOServer } from 'socket.io';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
-import path from 'path';
 
 // Import routes
 import proctorSessionRoutes from './routes/proctorSession';
@@ -29,14 +27,7 @@ class ExamProctorServer {
   constructor() {
     this.app = express();
     this.port = parseInt(process.env.PORT || '3000');
-    
-    // Create HTTPS server if HTTPS is enabled
-    if (process.env.HTTPS === 'true') {
-      this.server = this.createHttpsServer();
-    } else {
-      this.server = createServer(this.app);
-    }
-    
+    this.server = createServer(this.app);
     this.io = new SocketIOServer(this.server, {
       cors: {
         origin: "*",
@@ -52,26 +43,11 @@ class ExamProctorServer {
   }
 
   private initializeMiddleware(): void {
-    // CORS configuration - Allow all origins in development for easier testing
-    if (process.env.NODE_ENV === 'development') {
-      this.app.use(cors({
-        origin: ['https://localhost:3001', 'http://localhost:3001', 'https://127.0.0.1:3001', 'http://127.0.0.1:3001'], // Allow both HTTP and HTTPS from frontend
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
-      }));
-      
-      // Add CORS preflight headers for development
-      this.app.options('*', cors());
-    } else {
-      // Production CORS settings - more restrictive
-      this.app.use(cors({
-        origin: ['https://localhost:3001', 'http://localhost:3001'],
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization']
-      }));
-    }
+    // CORS configuration
+    this.app.use(cors({
+      origin: process.env.NODE_ENV === 'production' ? 'https://localhost:3001' : '*',
+      credentials: true
+    }));
 
     // Body parsing middleware
     this.app.use(express.json({ limit: '10mb' }));
@@ -222,37 +198,13 @@ class ExamProctorServer {
     }
   };
 
-  private createHttpsServer(): any {
-    try {
-      // Try to use the same certificates as the frontend
-      const certPath = path.resolve('../frontend/certificates/localhost.pem');
-      const keyPath = path.resolve('../frontend/certificates/localhost-key.pem');
-      
-      const fs = require('fs');
-      const httpsOptions = {
-        key: fs.readFileSync(keyPath),
-        cert: fs.readFileSync(certPath)
-      };
-      
-      console.log('Using HTTPS certificates from frontend/certificates/');
-      return createHttpsServer(httpsOptions, this.app);
-    } catch (error) {
-      console.warn('Could not load HTTPS certificates, falling back to HTTP:', error);
-      console.log('To enable HTTPS, ensure certificates exist in frontend/certificates/');
-      return createServer(this.app);
-    }
-  }
-
   public start(): void {
     this.server.listen(this.port, () => {
-      const protocol = process.env.HTTPS === 'true' ? 'https' : 'http';
-      const wsProtocol = process.env.HTTPS === 'true' ? 'wss' : 'ws';
-      
       console.log(`
 🚀 Exam Proctor Server Started
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🌐 Server: ${protocol}://localhost:${this.port}
-🔄 WebSocket: ${wsProtocol}://localhost:${this.port}
+🌐 Server: http://localhost:${this.port}
+🔄 WebSocket: ws://localhost:${this.port}
 🗄️  Database: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/exam_proctor'}
 📁 Uploads: ./uploads/recordings
 🔧 Environment: ${process.env.NODE_ENV || 'development'}

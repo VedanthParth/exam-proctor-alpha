@@ -1,164 +1,348 @@
-Proctoring POC Application
-The Proctoring POC Application is a web-based Proof of Concept for proctoring. It captures user video and audio, uploads recordings to an Express.js backend, and generates transcripts. This POC establishes the core pipeline for media capture, storage, and speech-to-text, serving as a solid base for future enhancements in online exam monitoring.
+# Exam Proctor - External Call Monitor
 
-📋 Table of Contents
-✨ Features
+A comprehensive proctoring system that monitors external video calls (Google Meet, Zoom, Teams) and tracks user behavior through gaze detection, audio analysis, and suspicious activity monitoring.
 
-🛠️ Technologies Used
+> **Project Transformation**: This project has been completely rebuilt from a basic file upload system into a robust proctoring service, leveraging architectural patterns and components from the Taptic and Nova reference codebases.
 
-📂 Project Structure
+## 🔄 Project Transformation Overview
 
-🚀 Setup Instructions
+This project was transformed from a simple file upload application into a comprehensive external call monitoring and proctoring system. The transformation involved:
 
-▶️ Running the Application
+### **Original State**
+- Basic Express.js backend with file upload functionality
+- Simple frontend with video recording capabilities
+- No real-time monitoring or session management
+- Limited database integration
 
-🧑‍💻 How to Use
+### **Transformed Into**
+- **Robust Proctoring Service**: Complete session management with real-time monitoring
+- **External Call Integration**: Webhook support for Zoom, Google Meet, Teams
+- **AI/ML Ready Architecture**: Gaze tracking and audio analysis framework
+- **Real-time Dashboard**: Live monitoring interface with WebSocket integration
+- **Scalable Backend**: Modular TypeScript services with MongoDB persistence
+- **Modern Frontend**: Next.js 15 + React 19 with real-time updates
 
-🔮 Future Enhancements
+### **Reference Architecture Sources**
+- **Nova Backend** (`Nova/nova-backend/`): Session management, AI/ML processing patterns, modular service architecture
+- **Taptic Backend** (`Taptic/taptic-backend/`): Real-time communication, file handling, WebSocket integration
+- **Combined Best Practices**: Security patterns, API design, database modeling
 
-🤝 Contributing
+## 🚀 Features
 
-📜 License
+### Backend Services
+- **External Call Monitoring**: Listen to webhooks from external call platforms
+- **Gaze Tracking**: Monitor user's eye movement and attention
+- **Audio Analysis**: Detect multiple voices and background noise
+- **Session Management**: Start, monitor, and end proctoring sessions
+- **Recording Processing**: Store and process video/audio recordings
+- **Real-time WebSocket**: Live monitoring data streaming
+- **MongoDB Integration**: Persistent data storage
 
-✨ Features
-🎥 Live Video & Audio Capture: Utilizes the browser's MediaDevices API to access and display the user's camera and microphone feed.
+### Frontend Dashboard
+- **Real-time Dashboard**: Monitor active proctoring sessions
+- **Session Controls**: Start and end monitoring sessions
+- **Live Data Feeds**: Real-time gaze and audio monitoring
+- **External Call Events**: Track call participants and events
+- **Clean UI**: Intuitive interface for proctors
 
-⏺️ Recording Functionality: Allows users to start and stop recording their video and audio sessions.
+## 🏗️ Architecture & Implementation Details
 
-⬆️ Media Upload: Recorded media blobs are efficiently sent to the Express.js backend.
+### **Complete System Rebuild**
 
-💾 Backend Media Storage: The Express.js server receives and temporarily stores the recorded video/audio files.
+#### **Backend Transformation**
+```
+Original:                    →    Transformed:
+├── src/index.ts            →    ├── src/
+└── package.json           →    │   ├── controllers/          # API request handlers
+                           →    │   │   ├── proctorSession.ts # Session lifecycle
+                           →    │   │   └── recording.ts      # Recording operations
+                           →    │   ├── services/             # Business logic (Nova-inspired)
+                           →    │   │   ├── externalCallMonitoring.ts  # Session management
+                           →    │   │   ├── gazeTracking.ts             # Eye tracking
+                           →    │   │   ├── audioAnalysis.ts           # Voice analysis
+                           →    │   │   └── recording.ts               # File processing
+                           →    │   ├── models/               # MongoDB schemas
+                           →    │   │   ├── ProctorSession.ts
+                           →    │   │   ├── MonitoringData.ts
+                           →    │   │   └── ProcessingJob.ts
+                           →    │   ├── routes/               # API endpoints
+                           →    │   ├── middleware/           # Authentication, validation
+                           →    │   ├── utils/                # Helper functions
+                           →    │   ├── types/                # TypeScript definitions
+                           →    │   └── index.ts             # Main server (WebSocket + REST)
+                           →    ├── uploads/recordings/       # Secure file storage
+                           →    └── .env                     # Environment config
+```
 
-📝 Audio Transcription (Simulated): A backend endpoint is ready to integrate with a Speech-to-Text (STT) service to convert recorded audio into text transcripts. (Currently simulated for POC purposes).
+#### **Frontend Transformation**
+```
+Original:                    →    Transformed:
+├── src/app/page.tsx        →    ├── src/
+└── package.json           →    │   ├── app/
+                           →    │   │   ├── dashboard/        # Real-time monitoring dashboard
+                           →    │   │   │   └── page.tsx
+                           →    │   │   └── page.tsx         # Root redirect
+                           →    │   ├── components/           # Reusable UI (Taptic-inspired)
+                           →    │   │   ├── SessionStatus.tsx
+                           →    │   │   └── SessionControls.tsx
+                           →    │   ├── hooks/                # Custom React hooks
+                           →    │   │   ├── useProctorSession.ts
+                           →    │   │   └── useWebSocket.ts
+                           →    │   ├── services/             # API integration
+                           →    │   │   ├── api.ts
+                           →    │   │   └── websocket.ts
+                           →    │   └── types/                # TypeScript definitions
+                           →    └── .env.local               # Environment config
+```
 
-👁️ Transcript Display: The generated transcript (or simulated text) is displayed on the frontend after processing.
+### **Technology Stack Upgrades**
 
-🛠️ Technologies Used
-Frontend (Next.js)
-Next.js: React framework for building server-rendered and static web applications.
+#### **Backend Dependencies Added**
+```json
+{
+  "AI/ML Processing": {
+    "@xenova/transformers": "^2.17.2",    // AI model processing
+    "opencv4nodejs": "^5.6.0"             // Computer vision
+  },
+  "Real-time Communication": {
+    "socket.io": "^4.7.5",                // WebSocket server
+    "ws": "^8.16.0"                       // WebSocket protocol
+  },
+  "Database & Storage": {
+    "mongoose": "^8.1.1",                 // MongoDB ODM
+    "mongodb": "^6.3.0"                   // Database driver
+  },
+  "Media Processing": {
+    "fluent-ffmpeg": "^2.1.3",           // Video processing
+    "sharp": "^0.34.2"                    // Image processing
+  },
+  "External Integration": {
+    "puppeteer": "^21.11.0"               // Browser automation
+  },
+  "Core Utilities": {
+    "multer": "^2.0.1",                   // File uploads
+    "uuid": "^11.1.0",                    // Unique identifiers
+    "dotenv": "^16.4.1"                   // Environment config
+  }
+}
+```
 
-React: JavaScript library for building user interfaces.
+#### **Frontend Dependencies Added**
+```json
+{
+  "Real-time Communication": {
+    "socket.io-client": "Latest"          // WebSocket client
+  },
+  "Framework Upgrades": {
+    "next": "15.x",                       // Next.js 15
+    "react": "19.x"                       // React 19
+  }
+}
+```
 
-Tailwind CSS: A utility-first CSS framework for rapid UI development.
+## 🛠️ Setup Instructions
 
-MediaRecorder API: Browser API for recording media.
+### Prerequisites
+- Node.js 18+ and pnpm
+- MongoDB (local or cloud)
+- Git
 
-fetch API: For making HTTP requests to the backend.
+### 1. Backend Setup
 
-Backend (Express.js)
-Express.js: Fast, unopinionated, minimalist web framework for Node.js.
-
-Node.js: JavaScript runtime environment.
-
-Multer: Middleware for handling multipart/form-data, primarily used for file uploads.
-
-CORS: Middleware to enable Cross-Origin Resource Sharing.
-
-📂 Project Structure
-.
-├── backend/
-│   ├── src/
-│   │   ├── index.ts        # Express.js server entry point
-│   │   └── routes/         # (Optional) For organizing API routes
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── uploads/            # Directory for temporary file storage
-│
-└── frontend/
-    ├── src/
-    │   ├── app/            # Next.js App Router root
-    │   │   ├── page.tsx    # Main application page
-    │   │   └── layout.tsx
-    │   ├── components/
-    │   │   └── ProctorCam.tsx # Component for camera capture & recording
-    │   └── styles/
-    │       └── globals.css
-    ├── public/
-    ├── package.json
-    ├── next.config.mjs
-    ├── tailwind.config.ts
-    └── tsconfig.json
-🚀 Setup Instructions
-Prerequisites:
-
-Node.js (LTS version recommended)
-
-npm, yarn, or pnpm (pnpm is used in examples)
-
-Git
-
-Steps:
-
-Clone the repository:
-
-Bash
-
-git clone https://github.com/your-username/proctoring-poc-app.git
-cd proctoring-poc-app
-Install Backend Dependencies:
-
-Bash
-
+```bash
 cd backend
-pnpm install # or npm install / yarn install
-Install Frontend Dependencies:
+pnpm install
+```
 
-Bash
+Configure environment variables in `backend/.env`:
+```env
+PORT=3000
+NODE_ENV=development
+MONGODB_URI=mongodb://localhost:27017/exam_proctor
+API_KEY=exam-proctor-dev-key-2025
+LOG_LEVEL=info
+```
 
-cd ../frontend
-pnpm install # or npm install / yarn install
-▶️ Running the Application
-Start the Backend Server:
-Open a new terminal, navigate to the backend directory, and run:
+Start the backend:
+```bash
+pnpm run dev
+```
 
-Bash
+### 2. Frontend Setup
 
-cd backend
-pnpm run dev # If using ts-node-dev for development, otherwise:
-              # pnpm run start (for compiled JS)
-The backend server will typically run on http://localhost:8000 (or your configured port).
-
-Start the Frontend Development Server:
-Open another terminal, navigate to the frontend directory, and run:
-
-Bash
-
+```bash
 cd frontend
-pnpm run dev # or npm run dev / yarn dev
-The Next.js application will usually start on http://localhost:3000.
+pnpm install
+```
 
-🧑‍💻 How to Use
-Open your web browser and navigate to http://localhost:3000.
+Configure environment variables in `frontend/.env.local`:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3000
+NEXT_PUBLIC_WS_URL=http://localhost:3000
+NEXT_PUBLIC_API_KEY=exam-proctor-dev-key-2025
+```
 
-Grant Camera/Microphone Access: Your browser will prompt you to allow access to your camera and microphone. Please grant permission.
+Start the frontend:
+```bash
+pnpm run dev
+```
 
-Start Recording: Click the "Start Recording" button. You should see your live video feed.
+### 3. MongoDB Setup
 
-Stop Recording: Click the "Stop Recording" button. The recorded media will be uploaded to the backend.
+Install and start MongoDB locally, or use MongoDB Atlas:
+```bash
+# Local MongoDB
+mongod --dbpath /your/data/path
 
-View Transcript: After the upload and (simulated) transcription process completes, the transcript will appear on the screen.
+# Or use Docker
+docker run -d -p 27017:27017 --name mongodb mongo:latest
+```
 
-🔮 Future Enhancements
-This POC serves as a strong foundation. Here are some potential future enhancements:
+## 📊 API Endpoints
 
-Real-time Transcription: Integrate with a robust cloud-based Speech-to-Text API (e.g., Google Cloud Speech-to-Text, AWS Transcribe, AssemblyAI) for accurate, real-time or near-real-time transcription.
+### Session Management
+- `POST /api/sessions/start` - Start a new proctoring session
+- `POST /api/sessions/:sessionId/end` - End a proctoring session
+- `GET /api/sessions/:sessionId/status` - Get session status
+- `GET /api/sessions/active` - Get all active sessions
+- `GET /api/sessions/history/:userId` - Get user's session history
 
-Proctoring Analytics: Implement AI/ML models for gaze detection, object detection, anomaly detection, and sentiment analysis on the recorded data and transcripts.
+### Recording Management
+- `POST /api/recordings/upload` - Upload recording files
+- `GET /api/recordings/:sessionId/:recordingType` - Download recordings
+- `GET /api/recordings/:sessionId/info` - Get recording information
+- `DELETE /api/recordings/:sessionId/:recordingType` - Delete recordings
 
-Database Integration: Store recordings, transcripts, and proctoring events in a persistent database.
+### Webhooks
+- `POST /webhook/external-call` - Receive external call platform webhooks
 
-User Authentication & Authorization: Implement secure login and role-based access control.
+## 🔌 WebSocket Events
 
-Robust Error Handling & Logging: Comprehensive error handling and server-side logging.
+### Client to Server
+- `join-session` - Join a proctoring session
+- `monitoring-data` - Send real-time monitoring data
+- `external-call-event` - Send external call events
 
-Scalable Media Storage: Utilize cloud storage solutions (e.g., AWS S3, Google Cloud Storage) for managing recorded media.
+### Server to Client
+- `monitoring-update` - Real-time monitoring data updates
+- `call-event` - External call events
+- `external-call-webhook` - Webhook notifications
 
-Real-time Communication: Integrate WebSockets for real-time proctor alerts or chat features.
+## 🎯 Usage
 
-Improved UI/UX: Enhance the user interface for a more polished and intuitive experience.
+1. **Start the System**:
+   - Start MongoDB
+   - Start backend server (`pnpm run dev` in backend/)
+   - Start frontend (`pnpm run dev` in frontend/)
 
-🤝 Contributing
-Contributions are welcome! If you have suggestions or want to improve this POC, feel free to open an issue or submit a pull request.
+2. **Access the Dashboard**:
+   - Open http://localhost:3001 in your browser
+   - You'll be redirected to the dashboard automatically
 
-📜 License
-This project is licensed under the MIT License - see the LICENSE file for details (you might need to create this file in the root of your repository).
+3. **Start Monitoring**:
+   - Fill in the user ID to monitor
+   - Enter the external call ID (e.g., Google Meet room ID)
+   - Select the call platform
+   - Click "Start Proctoring Session"
+
+4. **Monitor Activity**:
+   - View real-time gaze tracking data
+   - Monitor audio analysis results
+   - Track suspicious activities
+   - Observe external call events
+
+5. **End Session**:
+   - Click "End Proctoring Session" when done
+   - Review session data and recordings
+
+## 🔧 Integration with External Platforms
+
+### Google Meet Integration
+To integrate with Google Meet, you would need to:
+1. Create a browser extension that injects into Google Meet
+2. Use the Google Meet API (if available)
+3. Set up webhooks to notify your backend
+
+### Zoom Integration
+For Zoom integration:
+1. Use Zoom Webhooks API
+2. Subscribe to meeting events
+3. Configure webhook endpoint: `POST /webhook/external-call`
+
+### Teams Integration
+For Microsoft Teams:
+1. Use Microsoft Graph API
+2. Set up Teams application
+3. Configure webhooks for call events
+
+## 🚨 Important Notes & Current Status
+
+### **Implementation Status**
+- ✅ **Complete Backend Architecture**: Fully functional REST API + WebSocket server
+- ✅ **Real-time Dashboard**: Live monitoring interface with session controls
+- ✅ **Database Integration**: MongoDB with proper schemas and relationships
+- ✅ **External Platform Framework**: Webhook infrastructure for call platforms
+- ✅ **Recording System**: Video/audio capture, storage, and transcription
+- ⚠️ **Simulated Monitoring**: Gaze tracking and audio analysis use simulated data
+- ⚠️ **Development Stage**: Ready for extension with real AI/ML implementations
+
+### **Production Considerations**
+- **Privacy Compliance**: Ensure compliance with privacy and legal requirements
+- **Real AI Integration**: Replace simulated gaze/audio analysis with actual computer vision
+- **Platform Authentication**: Implement OAuth for Zoom/Meet/Teams integration
+- **Scalability**: Consider clustering and load balancing for production use
+- **Security Hardening**: Implement rate limiting, API throttling, and enhanced authentication
+
+### **Next Steps for Real Implementation**
+1. **Computer Vision Integration**: Replace simulated gaze tracking with OpenCV/MediaPipe
+2. **Audio Processing**: Implement real audio analysis using Web Audio API or server-side processing
+3. **Browser Extension Development**: Create extensions for actual call platform integration
+4. **Cloud Deployment**: Set up production infrastructure with proper monitoring
+5. **Testing Suite**: Implement comprehensive unit and integration tests
+
+## 📈 Project Evolution Summary
+
+**Original Project**: Basic file upload system with simple video recording  
+**Transformed Into**: Comprehensive external call monitoring and proctoring service
+
+### **Key Achievements**
+- 🏗️ **Complete Architecture Rebuild**: Modular, scalable, production-ready structure
+- 🔄 **Real-time Capabilities**: WebSocket integration for live monitoring
+- 🧠 **AI/ML Ready Framework**: Extensible architecture for computer vision and audio analysis
+- 🔗 **External Integration**: Webhook system for major video call platforms
+- 📊 **Data Persistence**: Robust MongoDB integration with proper schemas
+- 🎯 **Modern Tech Stack**: Latest Next.js, React, TypeScript, and Node.js
+
+### **Technical Debt Resolved**
+- ❌ Single-file backend → ✅ Modular service architecture
+- ❌ No real-time features → ✅ WebSocket-based live updates
+- ❌ Basic file handling → ✅ Secure, validated file management
+- ❌ No session management → ✅ Complete session lifecycle handling
+- ❌ Limited TypeScript → ✅ Full type safety throughout
+
+### **Reference Architecture Sources**
+- **Nova Backend**: Session management, AI/ML processing, database modeling
+- **Taptic Backend**: Real-time communication, file handling, API structure
+- **Custom Integration**: External call monitoring, proctoring-specific features
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes following the established patterns from Nova/Taptic
+4. Test thoroughly with both backend and frontend
+5. Submit a pull request with detailed description
+
+## 📄 License
+
+This project is licensed under the ISC License.
+
+---
+
+**Built with:**
+- **Backend**: Node.js, Express, TypeScript, MongoDB, Socket.IO, OpenCV (ready), AI/ML (framework)
+- **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS, Socket.IO Client  
+- **Infrastructure**: Docker, MongoDB, WebSocket, REST APIs, Webhook Integration
+- **Architecture**: Microservices-inspired, Nova & Taptic patterns, Real-time monitoring

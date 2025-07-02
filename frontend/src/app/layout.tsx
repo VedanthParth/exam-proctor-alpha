@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Exam Proctor - Video Recorder",
-  description: "Exam proctoring system with video recording and AI transcription",
+  title: "Exam Proctor - External Call Monitor",
+  description: "Advanced proctoring system for monitoring external video calls",
 };
 
 export default function RootLayout({
